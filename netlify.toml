@@ -1,19 +1,23 @@
 [build]
-  # We run the build command inside the frontend folder
+  # Run the React build inside the frontend folder
   command = "cd library_frontend/library-time-sheet-frontend && npm install && npm run build"
-  # We tell Netlify where the final website files end up
+  # Publish the compiled React app
   publish = "library_frontend/library-time-sheet-frontend/build"
 
+[build.environment]
+  # Netlify installs a Python runtime for serverless functions
+  PYTHON_VERSION = "3.10"
+
 [functions]
-  # Now Netlify can find your python code because we are at the root
+  # Netlify will bundle everything under this folder as serverless functions
   directory = "python_functions"
 
 # --- TRAFFIC RULES ---
 
-# Rule 1: Send API requests to your Python file (library_excel.py)
+# Rule 1: Send API requests to the Python function (library_excel.py)
 [[redirects]]
   from = "/api/*"
-  to = "/.netlify/functions/:splat"
+  to = "/.netlify/functions/library_excel/:splat"
   status = 200
   force = true
 
