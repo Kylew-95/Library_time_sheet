@@ -1,7 +1,4 @@
-// Default to the Netlify function path so requests avoid redirect reliance.
-// Allow override via REACT_APP_API_BASE for local development.
-const API_BASE =
-  process.env.REACT_APP_API_BASE || "/.netlify/functions/library_excel";
+const API_BASE = process.env.REACT_APP_API_BASE || "/api";
 export async function fetchStaff() {
   const res = await fetch(`${API_BASE}/staff`);
   if (!res.ok) throw new Error(`Staff fetch failed: ${res.status}`);
