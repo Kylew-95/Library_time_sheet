@@ -13,8 +13,9 @@
 # Rule 1: Send API requests to your Python file (library_excel.py)
 [[redirects]]
   from = "/api/*"
-  to = "/.netlify/functions/library_excel/:splat"
+  to = "/.netlify/functions/:splat"
   status = 200
+  force = true
 
 # Rule 2: Send everything else to the React app
 [[redirects]]
