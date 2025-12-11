@@ -1,5 +1,13 @@
 import { useEffect, useState } from "react";
-import { fetchStaff, addStaff, deleteStaff, generateTimesheet } from "./api";
+import {
+  fetchStaff,
+  addStaff,
+  deleteStaff,
+  generateTimesheet,
+  fetchProfiles,
+  addProfile,
+  deleteProfile,
+} from "./api";
 import "./App.css";
 
 type Staff = {
@@ -11,6 +19,7 @@ type Staff = {
   tea_slot?: string;
   status_detail?: string;
 };
+type Profile = Staff;
 
 const roleOptions = ["Duty Manager", "Scale 3", "Volunteer"];
 const statusOptions = ["Available", "Annual Leave", "Sick", "Other Library"];
@@ -45,6 +54,14 @@ function parseTimeToDecimal(timeStr: string): number | null {
   const minutes = Number(match[2]);
   if (![0, 15, 30, 45].includes(minutes)) return null;
   return hours + minutes / 60;
+}
+
+function decimalToTime(value: number): string {
+  const hours = Math.floor(value);
+  const minutes = Math.round((value - hours) * 60);
+  const hh = hours.toString().padStart(2, "0");
+  const mm = minutes.toString().padStart(2, "0");
+  return `${hh}:${mm}`;
 }
 
 const blankScheduleJson = () =>
@@ -96,6 +113,7 @@ function App() {
   const [teaSlot, setTeaSlot] = useState("");
 
   const [scheduleJson, setScheduleJson] = useState(blankScheduleJson);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
 
   const loadStaff = async () => {
     try {
@@ -107,8 +125,19 @@ function App() {
     }
   };
 
+  const loadProfiles = async () => {
+    try {
+      setError(null);
+      const data = await fetchProfiles();
+      setProfiles(data);
+    } catch (e: any) {
+      setError(e.message || "Failed to load profiles");
+    }
+  };
+
   useEffect(() => {
     loadStaff();
+    loadProfiles();
   }, []);
 
   const handleAddStaff = async (e: React.FormEvent) => {
@@ -177,6 +206,7 @@ function App() {
 
       await addStaff(scheduleEntry as any);
       setScheduleJson((prev) => appendEntryToScheduleJson(prev, scheduleEntry));
+      await loadStaff();
       setName("");
       setRole(roleOptions[0]);
       setStatus(statusOptions[0]);
@@ -184,9 +214,90 @@ function App() {
       setStartHour("");
       setEndHour("");
       setTeaSlot("");
-      await loadStaff();
     } catch (e: any) {
       setError(e.message || "Failed to add staff");
+    }
+  };
+
+  const handleAddProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setError(null);
+      if (!name.trim()) {
+        setError("Enter a name before saving a profile.");
+        return;
+      }
+      const parsedStart =
+        startHour.trim() === ""
+          ? undefined
+          : parseTimeToDecimal(startHour) ?? undefined;
+      const parsedEnd =
+        endHour.trim() === ""
+          ? undefined
+          : parseTimeToDecimal(endHour) ?? undefined;
+
+      if (startHour.trim() !== "" && parsedStart === null) {
+        setError("Start time must be HH:MM using 00/15/30/45 minutes.");
+        return;
+      }
+      if (endHour.trim() !== "" && parsedEnd === null) {
+        setError("End time must be HH:MM using 00/15/30/45 minutes.");
+        return;
+      }
+
+      if (
+        parsedStart !== undefined &&
+        (parsedStart < MIN_START_HOUR || parsedStart > MAX_END_HOUR)
+      ) {
+        setError("Start time must be between 11:30 and 16:15.");
+        return;
+      }
+      if (
+        parsedEnd !== undefined &&
+        (parsedEnd < MIN_START_HOUR || parsedEnd > MAX_END_HOUR)
+      ) {
+        setError("End time must be between 11:30 and 16:15.");
+        return;
+      }
+      if (
+        parsedStart !== undefined &&
+        parsedEnd !== undefined &&
+        parsedStart >= parsedEnd
+      ) {
+        setError("End hour must be after start hour.");
+        return;
+      }
+
+      const normalizedTeaSlot = teaSlot.trim();
+      if (
+        normalizedTeaSlot &&
+        !["00", "15", "30", "45"].includes(normalizedTeaSlot)
+      ) {
+        setError("Tea slot must be 00, 15, 30, or 45 (for 13:00 hour).");
+        return;
+      }
+
+      const profile: Partial<Profile> = {
+        name,
+        role,
+        status,
+        status_detail: status === "Other Library" ? statusDetail : undefined,
+        start_hour: parsedStart,
+        end_hour: parsedEnd,
+        tea_slot: normalizedTeaSlot ? `13:${normalizedTeaSlot}` : undefined,
+      };
+
+      await addProfile(profile as any);
+      await loadProfiles();
+      setName("");
+      setRole(roleOptions[0]);
+      setStatus(statusOptions[0]);
+      setStatusDetail("");
+      setStartHour("");
+      setEndHour("");
+      setTeaSlot("");
+    } catch (e: any) {
+      setError(e.message || "Failed to save profile");
     }
   };
 
@@ -224,6 +335,30 @@ function App() {
       await loadStaff();
     } catch (e: any) {
       setError(e.message || "Failed to remove staff");
+    }
+  };
+
+  const handleDeleteProfile = async (profileName: string) => {
+    try {
+      setError(null);
+      await deleteProfile(profileName);
+      await loadProfiles();
+    } catch (e: any) {
+      setError(e.message || "Failed to remove profile");
+    }
+  };
+
+  const handleApplyProfile = (profile: Profile) => {
+    setName(profile.name);
+    setRole(profile.role);
+    setStatus(profile.status || statusOptions[0]);
+    setStatusDetail(profile.status_detail || "");
+    setStartHour(profile.start_hour ? decimalToTime(profile.start_hour) : "");
+    setEndHour(profile.end_hour ? decimalToTime(profile.end_hour) : "");
+    if (profile.tea_slot && profile.tea_slot.startsWith("13:")) {
+      setTeaSlot(profile.tea_slot.split(":")[1]);
+    } else {
+      setTeaSlot("");
     }
   };
 
@@ -295,8 +430,46 @@ function App() {
             ))}
           </select>
           <div className="hint">{TEA_HELPER_TEXT}</div>
-          <button type="submit" className="full-width">
+          <button type="submit" className="full-width" id="add-button">
             Add
+          </button>
+        </form>
+      </section>
+
+      <section>
+        <h2>Profiles</h2>
+        <div className="list">
+          {profiles.map((p) => (
+            <div key={p.name} className="list-row">
+              <strong>{p.name}</strong>
+              <span>{p.role}</span>
+              {p.status && <span>Status: {p.status}</span>}
+              {p.start_hour !== undefined && p.end_hour !== undefined && (
+                <span>
+                  Shift: {decimalToTime(p.start_hour)}-
+                  {decimalToTime(p.end_hour)}
+                </span>
+              )}
+              {p.tea_slot && <span>Tea: {p.tea_slot}</span>}
+              <div className="actions">
+                <button onClick={() => handleApplyProfile(p)}>Use</button>
+                <button onClick={() => handleDeleteProfile(p.name)}>
+                  Remove
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+        <form
+          onSubmit={handleAddProfile}
+          className="form-grid"
+          style={{ marginTop: 12 }}
+        >
+          <h3 style={{ gridColumn: "1 / -1" }}>
+            Save current fields as profile
+          </h3>
+          <button type="submit" className="full-width">
+            Save Profile
           </button>
         </form>
       </section>
