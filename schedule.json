@@ -1,0 +1,60 @@
+{
+  "schedule": [
+    {
+      "name": "Kyle",
+      "role": "Duty Manager",
+      "status": "Available",
+      "start_hour": 11,
+      "end_hour": 16
+    },
+    {
+      "name": "Faisal",
+      "role": "Duty Manager",
+      "status": "Available",
+      "start_hour": 11,
+      "end_hour": 16
+    },
+    {
+      "name": "Sukhi",
+      "role": "Scale 3",
+      "status": "Available",
+      "start_hour": 12,
+      "end_hour": 16
+    },
+    {
+      "name": "Tazim",
+      "role": "Scale 3",
+      "status": "Available",
+      "start_hour": 12,
+      "end_hour": 16
+    },
+    {
+      "name": "Ramisa",
+      "role": "Scale 3",
+      "status": "Available",
+      "start_hour": 12,
+      "end_hour": 16
+    },
+    {
+      "name": "Daniel",
+      "role": "Scale 3",
+      "status": "Available",
+      "start_hour": 12,
+      "end_hour": 16
+    },
+    {
+      "name": "Ope",
+      "role": "Scale 3",
+      "status": "Available",
+      "start_hour": 12,
+      "end_hour": 16
+    },
+    {
+      "name": "Fiona",
+      "role": "Volunteer",
+      "status": "Available",
+      "start_hour": 12,
+      "end_hour": 14
+    }
+  ]
+}
