@@ -1,0 +1,52 @@
+# ------------------------------------
+# 1. PYTHON/FLASK ENVIRONMENT
+# ------------------------------------
+# Virtual Environment (Crucial for portability)
+venv/
+.venv/
+env/
+
+# Byte-code and setup files
+*.pyc
+__pycache__/
+.eggs/
+*.egg-info
+build/
+dist/
+
+# IDE/Tooling files (VS Code, PyCharm, etc.)
+.idea/
+.vscode/
+
+# ------------------------------------
+# 2. DEPENDENCIES / BUILD ARTIFACTS
+# ------------------------------------
+# Node modules directory (If React/Node frontend is in the same folder)
+node_modules/
+
+# Frontend build output
+build/
+dist/
+
+# ------------------------------------
+# 3. SENSITIVE & GENERATED FILES (CRITICAL)
+# ------------------------------------
+# SQLite Database (Contains unique staff names/roles; must NOT be committed)
+staff.db
+
+# Generated Excel output files
+*.xlsx
+*.xls
+
+# Environment variables (Used for production configuration, should not be public)
+.env
+.flaskenv
+
+# Log files
+*.log
+
+# ------------------------------------
+# 4. OPERATING SYSTEM / TEMPORARY FILES
+# ------------------------------------
+.DS_Store # macOS
+Thumbs.db # Windows
