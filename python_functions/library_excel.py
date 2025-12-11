@@ -9,6 +9,7 @@ import random
 import pandas as pd
 from flask import Flask, request, send_file, jsonify
 from flask_cors import CORS
+import serverless_wsgi
 
 
 # --- 1. APPLICATION SETUP ---
@@ -125,7 +126,8 @@ def manage_profiles():
                 INSERT INTO profiles (name, role, status, status_detail, start_hour, end_hour, tea_slot)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (name, role, status, status_detail, start_hour, end_hour, tea_slot),
+                (name, role, status, status_detail,
+                 start_hour, end_hour, tea_slot),
             )
             conn.commit()
             conn.close()
@@ -993,6 +995,10 @@ def generate_timesheet():
         print(f"Scheduling Error: {e}")
         traceback.print_exc()
         return jsonify({"error": f"Failed to generate timesheet. Error: {str(e)}"}), 500
+
+
+def handler(event, context):
+    return serverless_wsgi.handle_request(app, event, context)
 
 
 if __name__ == '__main__':

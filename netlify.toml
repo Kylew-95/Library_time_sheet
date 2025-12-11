@@ -1,12 +1,23 @@
 [build]
-base = "library_frontend/library-time-sheet-frontend"
-command = "npm run build"
-publish = "build"
+  # We run the build command inside the frontend folder
+  command = "cd library_frontend/library-time-sheet-frontend && npm install && npm run build"
+  # We tell Netlify where the final website files end up
+  publish = "library_frontend/library-time-sheet-frontend/build"
 
-[build.environment]
-NODE_VERSION = "18"
+[functions]
+  # Now Netlify can find your python code because we are at the root
+  directory = "python_functions"
 
+# --- TRAFFIC RULES ---
+
+# Rule 1: Send API requests to your Python file (library_excel.py)
 [[redirects]]
-from = "/*"
-to = "/index.html"
-status = 200
+  from = "/api/*"
+  to = "/.netlify/functions/library_excel/:splat"
+  status = 200
+
+# Rule 2: Send everything else to the React app
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
