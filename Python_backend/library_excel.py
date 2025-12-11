@@ -1,18 +1,20 @@
+import traceback
+import os
+from openpyxl import Workbook
+from openpyxl.styles import PatternFill, Font, Border, Side, Alignment
+import io
+import sqlite3
+from datetime import datetime
 import random
 import pandas as pd
 from flask import Flask, request, send_file, jsonify
-from datetime import datetime
-import sqlite3
-import io
-from openpyxl.styles import PatternFill, Font, Border, Side, Alignment
-from openpyxl import Workbook
-import os
-import traceback
+from flask_cors import CORS
+
 
 # --- 1. APPLICATION SETUP ---
 app = Flask(__name__)
 DATABASE = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'staff.db')
-
+CORS(app)
 # --- 2. CONFIGURATION DATA ---
 ROLE_PRIORITY = {"Duty Manager": 1, "Scale 3": 2, "Volunteer": 3}
 
@@ -33,6 +35,8 @@ GREEN_FILL = PatternFill(start_color="92D050",
 
 BLACKOUT_FILL = PatternFill(
     start_color="000000", end_color="000000", fill_type="solid")
+TEA_FILL = PatternFill(start_color="B7DEE8",
+                       end_color="B7DEE8", fill_type="solid")  # light blue
 
 # First staff row in Excel
 DATA_START_ROW_EXCEL = 6
@@ -49,6 +53,18 @@ def init_db():
             id INTEGER PRIMARY KEY,
             name TEXT UNIQUE NOT NULL,
             role TEXT NOT NULL
+        )
+    ''')
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS profiles (
+            id INTEGER PRIMARY KEY,
+            name TEXT UNIQUE NOT NULL,
+            role TEXT NOT NULL,
+            status TEXT,
+            status_detail TEXT,
+            start_hour REAL,
+            end_hour REAL,
+            tea_slot TEXT
         )
     ''')
     conn.commit()
@@ -84,27 +100,146 @@ def manage_staff():
     return jsonify([{"name": s[0], "role": s[1]} for s in staff_list])
 
 
+@app.route('/profiles', methods=['GET', 'POST'])
+def manage_profiles():
+    conn = sqlite3.connect(DATABASE)
+    c = conn.cursor()
+
+    if request.method == 'POST':
+        data = request.json or {}
+        name = data.get('name')
+        role = data.get('role')
+        status = data.get('status')
+        status_detail = data.get('status_detail')
+        start_hour = data.get('start_hour')
+        end_hour = data.get('end_hour')
+        tea_slot = data.get('tea_slot')
+
+        if not name or not role:
+            conn.close()
+            return jsonify({"error": "Name and Role are required."}), 400
+
+        try:
+            c.execute(
+                """
+                INSERT INTO profiles (name, role, status, status_detail, start_hour, end_hour, tea_slot)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (name, role, status, status_detail, start_hour, end_hour, tea_slot),
+            )
+            conn.commit()
+            conn.close()
+            return jsonify({"message": f"Profile {name} saved."}), 201
+        except sqlite3.IntegrityError:
+            conn.close()
+            return jsonify({"error": f"Profile {name} already exists."}), 409
+
+    profiles = c.execute(
+        "SELECT name, role, status, status_detail, start_hour, end_hour, tea_slot FROM profiles"
+    ).fetchall()
+    conn.close()
+    result = []
+    for p in profiles:
+        result.append({
+            "name": p[0],
+            "role": p[1],
+            "status": p[2],
+            "status_detail": p[3],
+            "start_hour": p[4],
+            "end_hour": p[5],
+            "tea_slot": p[6],
+        })
+    return jsonify(result)
+
+
+@app.route('/profiles/<name>', methods=['DELETE'])
+def delete_profile(name):
+    conn = sqlite3.connect(DATABASE)
+    c = conn.cursor()
+    c.execute("DELETE FROM profiles WHERE name = ?", (name,))
+    conn.commit()
+    deleted = c.rowcount
+    conn.close()
+    if deleted == 0:
+        return jsonify({"error": f"Profile {name} not found."}), 404
+    return jsonify({"message": f"Profile {name} removed."})
+
+
+@app.route('/staff/<name>', methods=['DELETE'])
+def delete_staff(name):
+    """
+    Remove a staff member by exact name match.
+    """
+    conn = sqlite3.connect(DATABASE)
+    c = conn.cursor()
+    c.execute("DELETE FROM staff WHERE name = ?", (name,))
+    conn.commit()
+    deleted = c.rowcount
+    conn.close()
+
+    if deleted == 0:
+        return jsonify({"error": f"Staff member {name} not found."}), 404
+    return jsonify({"message": f"Staff member {name} removed."})
+
+
 # --- 4. CORE SCHEDULING LOGIC ---
 
 
 def auto_assign_tea_slots(staff_data):
     """
-    Automatically assign tea slots for everyone on shift 13:00–14:00.
+    Automatically assign tea slots for everyone on shift 13:00-14:00.
     Spread across 13:00, 13:15, 13:30, 13:45.
     """
     tea_times = ["13:00", "13:15", "13:30", "13:45"]
-    idx = 0
+    # Track how many people are on each tea slot (max 2 per slot)
+    used_slots = {t: 0 for t in tea_times}
 
+    # Respect any pre-set tea slots (user choice)
     for staff in staff_data:
+        preset = staff.get("tea_slot")
+        if isinstance(preset, str) and preset.startswith("13:"):
+            if preset in used_slots:
+                used_slots[preset] += 1
+            else:
+                used_slots[preset] = 1
+
+    # Kyle always takes tea at 13:45 if on shift and available
+    for staff in staff_data:
+        if staff.get("name") == "Kyle" and staff.get("status", "Available") == "Available":
+            start = staff.get("start_hour", 0)
+            end = staff.get("end_hour", 0)
+            if start <= 13 < end:
+                if used_slots.get("13:45", 0) < 2:
+                    staff["tea_slot"] = "13:45"
+                    used_slots["13:45"] = used_slots.get("13:45", 0) + 1
+            break
+
+    # Eligible for tea: Scale 3 and Duty Manager (Volunteers excluded), shuffled to randomize allocation
+    eligible = []
+    for staff in staff_data:
+        if staff.get("role") not in ["Scale 3", "Duty Manager"]:
+            continue
         if staff.get("status", "Available") != "Available":
             continue
-
+        if staff.get("tea_slot"):
+            continue  # already set (either preset or Kyle rule)
         start = staff.get("start_hour", 0)
         end = staff.get("end_hour", 0)
-
         if start <= 13 < end:
-            staff["tea_slot"] = tea_times[idx % len(tea_times)]
-            idx += 1
+            eligible.append(staff)
+
+    random.shuffle(eligible)
+    for staff in eligible:
+        # Pick the first slot with fewer than 2 people, preferring lower counts
+        slot = None
+        # Sort by current usage to balance distribution
+        for t in sorted(tea_times, key=lambda x: used_slots.get(x, 0)):
+            if used_slots.get(t, 0) < 2:
+                slot = t
+                break
+        if slot:
+            staff["tea_slot"] = slot
+            used_slots[slot] = used_slots.get(slot, 0) + 1
 
 
 def build_shift_label(staff):
@@ -128,6 +263,23 @@ def generate_schedule_data(staff_data, date_str):
     # Assign teas automatically
     auto_assign_tea_slots(staff_data)
 
+    # Collect duty managers available during 13:00-14:00 for tea coverage
+    duty_managers_at_one = [
+        s["name"] for s in staff_data
+        if s.get("role") == "Duty Manager"
+        and s.get("status", "Available") == "Available"
+        and s.get("start_hour", 0) <= 13 < s.get("end_hour", 0)
+    ]
+
+    # Track which 15-min slots have a Scale 3 on tea (minute component only)
+    scale3_tea_minutes = set()
+    for s in staff_data:
+        if s.get("role") != "Scale 3":
+            continue
+        tea_slot = s.get("tea_slot")
+        if isinstance(tea_slot, str) and ":" in tea_slot:
+            scale3_tea_minutes.add(tea_slot.split(":")[1])
+
     # Sort staff by availability, role, name
     def sort_key(s):
         availability_priority = 1 if s.get(
@@ -140,6 +292,10 @@ def generate_schedule_data(staff_data, date_str):
 
     # Track who has already had SM (stock movement) today
     sm_assigned_staff = set()
+    # Track who has already had Reception today
+    r_assigned_staff = set()
+    # Track volunteer tasks used per shift (to ensure two different tasks)
+    volunteer_task_history = {}
 
     # --- 2. Fixed Assignments (Set Up, Tea) ---
     setup_slot_key = "11:30"
@@ -182,6 +338,7 @@ def generate_schedule_data(staff_data, date_str):
 
         random.shuffle(available_staff_for_hour)
         tasks_assigned_in_hour = []
+        tasks_taken_in_hour = set()
 
         # Mandatory cover: SM (one per hour, but each person at most once per day),
         # R, C, C+
@@ -218,11 +375,26 @@ def generate_schedule_data(staff_data, date_str):
                 # Remove from scale3_staff so they don't also get R/C in this hour
                 if staff_to_assign in scale3_staff:
                     scale3_staff.remove(staff_to_assign)
+                tasks_taken_in_hour.add(task)
+            elif task == "R":
+                # Reception only once per person per shift
+                candidates = [
+                    s for s in scale3_staff if s["name"] not in r_assigned_staff
+                ]
+                if not candidates:
+                    continue
+                staff_to_assign = candidates[0]
+                name = staff_to_assign["name"]
+                r_assigned_staff.add(name)
+                if staff_to_assign in scale3_staff:
+                    scale3_staff.remove(staff_to_assign)
+                tasks_taken_in_hour.add(task)
             else:
                 if not scale3_staff:
                     continue
                 staff_to_assign = scale3_staff.pop(0)
                 name = staff_to_assign["name"]
+                tasks_taken_in_hour.add(task)
 
             pivot_schedule[name][time_str] = task
             tasks_assigned_in_hour.append(name)
@@ -240,11 +412,24 @@ def generate_schedule_data(staff_data, date_str):
             role = staff.get("role", "")
             name = staff.get("name", "")
             assignable_tasks = [
-                t for t in random_tasks if role in TASK_CONFIG[t]["roles"]]
+                t for t in random_tasks
+                if role in TASK_CONFIG[t]["roles"] and t not in tasks_taken_in_hour
+            ]
+            # Volunteers must do two different tasks during their shift if possible
+            if role == "Volunteer":
+                used = volunteer_task_history.get(name, set())
+                unused_variants = [
+                    t for t in assignable_tasks if t not in used]
+                if unused_variants:
+                    assignable_tasks = unused_variants
             if assignable_tasks:
                 assigned_task = random.choice(assignable_tasks)
                 pivot_schedule[name][time_str] = assigned_task
                 tasks_assigned_in_hour.append(name)
+                tasks_taken_in_hour.add(assigned_task)
+                if role == "Volunteer":
+                    volunteer_task_history.setdefault(
+                        name, set()).add(assigned_task)
 
     # --- 4. Build DataFrame for the table area ---
 
@@ -269,6 +454,25 @@ def generate_schedule_data(staff_data, date_str):
 
     pivot_df_data = []
     task_code_map = {k: v["full_name"] for k, v in TASK_CONFIG.items()}
+    # Track tasks per 15-min slot (13:00 hour) to avoid overlap when DMs cover tea
+    minute_task_taken = {"00": set(), "15": set(), "30": set(), "45": set()}
+
+    # Pre-mark tasks already assigned at 13:00 before building rows (order-independent)
+    for staff in staff_data:
+        name = staff.get("name", "")
+        role = staff.get("role", "")
+        base_task_code = pivot_schedule.get(name, {}).get("13:00", "")
+        if not base_task_code:
+            continue
+        tea_slot = staff.get("tea_slot")
+        for minute in ["00", "15", "30", "45"]:
+            if isinstance(tea_slot, str) and tea_slot == f"13:{minute}":
+                continue  # tea minute not counted as task
+            display_task = task_code_map.get(base_task_code, base_task_code)
+            # DMs shouldn't be counted for non-DM tasks
+            if role == "Duty Manager" and base_task_code not in ["Set Up", "T"]:
+                continue
+            minute_task_taken[minute].add(display_task)
 
     for staff in staff_data:
         name = staff.get("name", "")
@@ -306,17 +510,24 @@ def generate_schedule_data(staff_data, date_str):
                         row["11.30-12"] = display_task
                     continue
 
-                # 13:00 – split into 4 mini slots (00/15/30/45)
+                # 13:00 - split into 4 mini slots (00/15/30/45)
                 if internal_key == "13:00":
                     base_task_code = pivot_schedule.get(
                         name, {}).get(internal_key, "")
                     tea_slot = staff.get("tea_slot")
+                    tea_minute = None
+                    if isinstance(tea_slot, str) and ":" in tea_slot:
+                        tea_minute = tea_slot.split(":")[1]
+                    dm_idx = None
+                    if role == "Duty Manager" and name in duty_managers_at_one:
+                        dm_idx = duty_managers_at_one.index(name)
 
                     for minute, col_name in [("00", "00"), ("15", "15"),
                                              ("30", "30"), ("45", "45")]:
                         # If this is their tea minute, put T
                         if isinstance(tea_slot, str) and tea_slot == f"13:{minute}":
                             row[col_name] = task_code_map["T"]
+                            # Do not mark tea in minute_task_taken to allow max-2 enforcement elsewhere
                         else:
                             # Otherwise, use base task if there is one
                             if base_task_code:
@@ -325,6 +536,29 @@ def generate_schedule_data(staff_data, date_str):
                                 # DMs shouldn't show "normal" tasks
                                 if not (role == "Duty Manager" and base_task_code not in ["Set Up", "T"]):
                                     row[col_name] = display_task
+                                    minute_task_taken[minute].add(display_task)
+
+                        # Duty Managers cover R/C while Scale 3s are on tea
+                        if role == "Duty Manager" and minute in scale3_tea_minutes and dm_idx is not None:
+                            # If DM is on tea, don't override their tea cell
+                            if row[col_name] == task_code_map["T"]:
+                                continue
+                            # Try to assign an available cover task (R then C)
+                            for cover_task in ["R", "C"]:
+                                display_cover_task = task_code_map.get(
+                                    cover_task, cover_task)
+                                # If task already taken this minute, skip
+                                if display_cover_task in minute_task_taken[minute]:
+                                    continue
+                                # Reception only once per DM
+                                if cover_task == "R" and name in r_assigned_staff:
+                                    continue
+                                row[col_name] = display_cover_task
+                                minute_task_taken[minute].add(
+                                    display_cover_task)
+                                if cover_task == "R":
+                                    r_assigned_staff.add(name)
+                                break
                     continue
 
                 # Normal hourly blocks: 12–1, 2–3, 3–4
@@ -340,6 +574,10 @@ def generate_schedule_data(staff_data, date_str):
                         row["2-3"] = display_task
                     elif internal_key == "15:00":
                         row["3-4"] = display_task
+
+        # Volunteers: record role in comments for quick identification
+        if role == "Volunteer" and not row["Comments"]:
+            row["Comments"] = role
 
         pivot_df_data.append(row)
 
@@ -514,6 +752,8 @@ def apply_excel_styling(writer, df, staff_data):
 
             if cell_value == sm_display_name:
                 cell.fill = GREEN_FILL
+            if cell_value == TASK_CONFIG["T"]["full_name"]:
+                cell.fill = TEA_FILL
 
     # 2. Blackout outside shift
     for r_idx, row in df.iterrows():
@@ -595,6 +835,81 @@ def apply_excel_styling(writer, df, staff_data):
         merged_cell.font = Font(name="Arial", bold=True)
         merged_cell.alignment = Alignment(
             horizontal="center", vertical="center")
+
+    # 3b. Merge 1-2 subslots per staff row, keeping tea as its own cell
+    tea_display = TASK_CONFIG["T"]["full_name"]
+    sub_slot_cols = ["00", "15", "30", "45"]
+    for r_idx, row in df.iterrows():
+        name = row["Staff Name"]
+        staff_info = staff_by_name.get(name)
+        if not staff_info:
+            continue
+
+        # Only merge for available staff to avoid clashing with sick/other merges
+        if staff_info.get("status", "Available") != "Available":
+            continue
+        # Duty Managers may cover single tea cells; avoid merging their 1-2 slots
+        if staff_info.get("role") == "Duty Manager":
+            continue
+
+        excel_row = DATA_START_ROW_EXCEL + r_idx
+        slot_values = [row[col] for col in sub_slot_cols]
+        slot_cols = [col_indices[col] + 1 for col in sub_slot_cols]
+
+        i = 0
+        while i < len(slot_values):
+            val = slot_values[i]
+            # Skip empty cells and tea cells
+            if not val or val == tea_display:
+                i += 1
+                continue
+
+            j = i + 1
+            while j < len(slot_values) and slot_values[j] == val and slot_values[j] != tea_display:
+                j += 1
+
+            # Merge only if span covers more than one cell
+            if j - i > 1:
+                worksheet.merge_cells(
+                    start_row=excel_row,
+                    start_column=slot_cols[i],
+                    end_row=excel_row,
+                    end_column=slot_cols[j - 1]
+                )
+                target_cell = worksheet.cell(
+                    row=excel_row, column=slot_cols[i])
+                target_cell.value = val
+            else:
+                target_cell = worksheet.cell(
+                    row=excel_row, column=slot_cols[i])
+            target_cell.alignment = Alignment(
+                horizontal="center", vertical="center")
+
+            i = j
+
+    # 3c. Colour volunteer task cells (non-tea) with a consistent random fill per volunteer
+    for r_idx, row in df.iterrows():
+        name = row["Staff Name"]
+        staff_info = staff_by_name.get(name)
+        if not staff_info or staff_info.get("role") != "Volunteer":
+            continue
+
+        rand_color = "{:02X}{:02X}{:02X}".format(
+            random.randint(80, 240),
+            random.randint(80, 240),
+            random.randint(80, 240),
+        )
+        fill = PatternFill(start_color=rand_color,
+                           end_color=rand_color, fill_type="solid")
+
+        excel_row = DATA_START_ROW_EXCEL + r_idx
+        for col_name in time_col_order:
+            val = row[col_name]
+            if not val or val == tea_display:
+                continue
+            excel_col = col_indices[col_name] + 1
+            cell = worksheet.cell(row=excel_row, column=excel_col)
+            cell.fill = fill
 
     # 4. Borders A1:K<last staff row>
     thin_border = Border(

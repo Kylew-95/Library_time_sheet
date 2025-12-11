@@ -48,13 +48,6 @@
       "status": "Available",
       "start_hour": 12,
       "end_hour": 16
-    },
-    {
-      "name": "Fiona",
-      "role": "Volunteer",
-      "status": "Available",
-      "start_hour": 12,
-      "end_hour": 14
     }
   ]
 }
