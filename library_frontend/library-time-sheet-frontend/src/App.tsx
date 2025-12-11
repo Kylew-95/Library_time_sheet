@@ -360,6 +360,7 @@ function App() {
     } else {
       setTeaSlot("");
     }
+    setScheduleJson((prev) => appendEntryToScheduleJson(prev, profile));
   };
 
   return (
