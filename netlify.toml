@@ -14,10 +14,10 @@
 
 # --- TRAFFIC RULES ---
 
-# Rule 1: Send API requests to your Python file (library_excel.py)
+# Rule 1: Send API requests to the Python function (library_excel.py)
 [[redirects]]
   from = "/api/*"
-  to = "/.netlify/functions/:splat"
+  to = "/.netlify/functions/library_excel/:splat"
   status = 200
   force = true
 

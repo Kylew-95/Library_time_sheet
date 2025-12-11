@@ -72,6 +72,10 @@ def init_db():
     conn.close()
 
 
+# Ensure tables exist for every serverless cold start
+init_db()
+
+
 @app.route('/staff', methods=['GET', 'POST'])
 def manage_staff():
     conn = sqlite3.connect(DATABASE)
