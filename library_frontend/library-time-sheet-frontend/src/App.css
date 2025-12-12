@@ -45,10 +45,6 @@ button {
   align-self: start;
 }
 
-#add-button {
-  flex: auto;
-  width: 6vw;
-}
 button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
