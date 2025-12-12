@@ -992,7 +992,7 @@ def generate_timesheet():
             output,
             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             as_attachment=True,
-            download_name=filename
+            attachment_filename=filename
         )
 
     except Exception as e:
