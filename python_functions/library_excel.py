@@ -1005,32 +1005,6 @@ def handler(event, context):
     return serverless_wsgi.handle_request(app, event, context)
 
 
-# Register prefixed aliases so Netlify rewrites ("/api/*" and the internal
-# "/.netlify/functions/library_excel/*") both resolve to the same handlers.
-API_ROUTE_PREFIXES = ["/api", "/.netlify/functions/library_excel"]
-
-
-def _register_prefixed_routes():
-    mappings = [
-        ("/staff", manage_staff, ["GET", "POST"]),
-        ("/staff/<name>", delete_staff, ["DELETE"]),
-        ("/profiles", manage_profiles, ["GET", "POST"]),
-        ("/profiles/<name>", delete_profile, ["DELETE"]),
-        ("/generate-timesheet", generate_timesheet, ["POST"]),
-    ]
-
-    for prefix in API_ROUTE_PREFIXES:
-        for rule, view_func, methods in mappings:
-            alias = f"{prefix}{rule}"
-            endpoint_suffix = prefix.strip("/").replace("/", "_") or "root"
-            endpoint = f"{view_func.__name__}_{endpoint_suffix}{rule.replace('/', '_')}"
-            app.add_url_rule(alias, endpoint=endpoint,
-                             view_func=view_func, methods=methods)
-
-
-_register_prefixed_routes()
-
-
 if __name__ == '__main__':
     init_db()
     print("\n---------------------------------------------------------")
