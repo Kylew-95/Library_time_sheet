@@ -10,7 +10,7 @@
 
 [functions]
   # Netlify will bundle everything under this folder as serverless functions
-  directory = "python_functions"
+  directory = "python_functionsh"
 
 # --- TRAFFIC RULES ---
 
