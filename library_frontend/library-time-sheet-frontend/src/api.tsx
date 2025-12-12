@@ -1,8 +1,6 @@
 const API_BASE = process.env.REACT_APP_API_BASE || "/api";
 export async function fetchStaff() {
-  const res = await fetch(`${API_BASE}/staff`);
-  if (!res.ok) throw new Error(`Staff fetch failed: ${res.status}`);
-  return res.json();
+  return request("/staff");
 }
 
 export async function addStaff(data: {
@@ -14,19 +12,19 @@ export async function addStaff(data: {
   tea_slot?: string;
   status_detail?: string;
 }) {
-  const res = await fetch(`${API_BASE}/staff`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  return request(
+    "/staff",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    },
+    "json"
+  );
 }
 
 export async function fetchProfiles() {
-  const res = await fetch(`${API_BASE}/profiles`);
-  if (!res.ok) throw new Error(`Profiles fetch failed: ${res.status}`);
-  return res.json();
+  return request("/profiles");
 }
 
 export async function addProfile(data: {
@@ -38,38 +36,47 @@ export async function addProfile(data: {
   tea_slot?: string;
   status_detail?: string;
 }) {
-  const res = await fetch(`${API_BASE}/profiles`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  return request(
+    "/profiles",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    },
+    "json"
+  );
 }
 
 export async function deleteProfile(name: string) {
   const encoded = encodeURIComponent(name);
-  const res = await fetch(`${API_BASE}/profiles/${encoded}`, {
-    method: "DELETE",
-  });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  return request(
+    `/profiles/${encoded}`,
+    {
+      method: "DELETE",
+    },
+    "json"
+  );
 }
 
 export async function deleteStaff(name: string) {
   const encoded = encodeURIComponent(name);
-  const res = await fetch(`${API_BASE}/staff/${encoded}`, { method: "DELETE" });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  return request(
+    `/staff/${encoded}`,
+    { method: "DELETE" },
+    "json"
+  );
 }
 
 export async function generateTimesheet(payload: any) {
-  const res = await fetch(`${API_BASE}/generate-timesheet`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw new Error(await res.text());
+  const res = (await request(
+    "/generate-timesheet",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    "blob"
+  )) as Response;
   const blob = await res.blob();
   const dispo = res.headers.get("content-disposition") || "";
   const match = dispo.match(/filename="?([^";]+)"?/);
