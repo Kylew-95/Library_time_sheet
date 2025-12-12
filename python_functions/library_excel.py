@@ -248,21 +248,37 @@ def auto_assign_tea_slots(staff_data):
             used_slots[slot] = used_slots.get(slot, 0) + 1
 
 
+def format_decimal_time(value):
+    """
+    Convert decimal hours (e.g. 11.5) into HH:MM strings that match the dropdown inputs.
+    """
+    if value is None:
+        return ""
+    try:
+        hours = int(value)
+        minutes = int(round((value - hours) * 60))
+        # Avoid 60 from floating point rounding.
+        if minutes == 60:
+            hours += 1
+            minutes = 0
+        return f"{hours:02d}:{minutes:02d}"
+    except Exception:
+        return str(value)
+
+
 def build_shift_label(staff):
     """
-    Build 'Shift' text like the sheet: e.g. '11.30-4', '12-4', '2-4'.
+    Build 'Shift' text using HH:MM so it matches the dropdown inputs exactly.
     """
-    role = staff.get("role", "")
-    start = staff.get("start_hour", 12)
-    end = staff.get("end_hour", 16)
+    start = staff.get("start_hour")
+    end = staff.get("end_hour")
 
-    if role == "Duty Manager" and start <= 11:
-        start_str = "11.30"
-    else:
-        start_str = str(start)
+    start_str = format_decimal_time(start) if start is not None else ""
+    end_str = format_decimal_time(end) if end is not None else ""
 
-    end_str = str(end - 12) if end > 12 else str(end)
-    return f"{start_str}-{end_str}"
+    if start_str and end_str:
+        return f"{start_str}-{end_str}"
+    return start_str or end_str
 
 
 def generate_schedule_data(staff_data, date_str):
