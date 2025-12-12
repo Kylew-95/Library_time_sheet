@@ -1,8 +1,7 @@
 [build]
-  # Run the React build inside the frontend folder
-  command = "npm run build"
-  # Publish the compiled React app
-  publish = "library_frontend/library-time-sheet-frontend/build"
+base = "library_frontend/library-time-sheet-frontend"
+command = "npm run build"
+publish = "build"
 
 # Rule 2: Send everything else to the React app
 [[redirects]]
