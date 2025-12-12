@@ -1,4 +1,38 @@
 const API_BASE = process.env.REACT_APP_API_BASE || "/api";
+
+type ResponseType = "json" | "text" | "blob" | "response";
+
+async function request(
+  path: string,
+  options: RequestInit = {},
+  responseType: ResponseType = "json"
+) {
+  const response = await fetch(`${API_BASE}${path}`, options);
+
+  if (!response.ok) {
+    let message = `Request failed with status ${response.status}`;
+    try {
+      const errorBody = await response.text();
+      if (errorBody) {
+        message = `${message}: ${errorBody}`;
+      }
+    } catch (_error) {
+      // Ignore body parsing errors and use default message.
+    }
+    throw new Error(message);
+  }
+
+  switch (responseType) {
+    case "text":
+      return response.text();
+    case "blob":
+    case "response":
+      return response;
+    default:
+      return response.json();
+  }
+}
+
 export async function fetchStaff() {
   return request("/staff");
 }
