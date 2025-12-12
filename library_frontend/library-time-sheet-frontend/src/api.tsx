@@ -1,4 +1,4 @@
-const API_BASE = process.env.REACT_APP_API_BASE || "/api";
+const API_BASE = process.env.REACT_APP_API_BASE || "5000";
 
 type ResponseType = "json" | "text" | "blob" | "response";
 
