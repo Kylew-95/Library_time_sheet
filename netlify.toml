@@ -1,6 +1,6 @@
 [build]
   # Run the React build inside the frontend folder
-  command = "cd library_frontend/library-time-sheet-frontend && npm install && npm run build"
+  command = "npm run build"
   # Publish the compiled React app
   publish = "library_frontend/library-time-sheet-frontend/build"
 
