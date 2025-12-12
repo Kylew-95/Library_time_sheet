@@ -4,23 +4,6 @@
   # Publish the compiled React app
   publish = "library_frontend/library-time-sheet-frontend/build"
 
-[build.environment]
-  # Netlify installs a Python runtime for serverless functions
-  PYTHON_VERSION = "3.10"
-
-[functions]
-  # Netlify will bundle everything under this folder as serverless functions
-  directory = "python_functionsh"
-
-# --- TRAFFIC RULES ---
-
-# Rule 1: Send API requests to the Python function (library_excel.py)
-[[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/library_excel/:splat"
-  status = 200
-  force = true
-
 # Rule 2: Send everything else to the React app
 [[redirects]]
   from = "/*"
