@@ -46,6 +46,7 @@ button {
 }
 
 #add-button {
+  flex: auto;
   width: 6vw;
 }
 button:disabled {
