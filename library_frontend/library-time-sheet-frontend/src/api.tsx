@@ -1,8 +1,42 @@
-const API_BASE = process.env.REACT_APP_API_BASE || "http://127.0.0.1:5000";
+// Prefer the rewrite-friendly /api base, but allow an override for local
+// development and fall back to the direct Netlify function path if /api is
+// not available.
+const PRIMARY_API_BASE = process.env.REACT_APP_API_BASE || "/api";
+const FALLBACK_API_BASE =
+  PRIMARY_API_BASE === "/api" ? "/.netlify/functions/library_excel" : "/api";
+
+async function apiRequest(
+  path: string,
+  options?: RequestInit,
+  parse: "json" | "blob" = "json"
+) {
+  const endpoints = [PRIMARY_API_BASE, FALLBACK_API_BASE].filter(
+    (base, idx, arr) => base && arr.indexOf(base) === idx
+  );
+
+  let lastResponse: Response | null = null;
+
+  for (const base of endpoints) {
+    const res = await fetch(`${base}${path}`, options);
+    lastResponse = res;
+    // Try next base only on 404 to recover from missing rewrites
+    if (res.status === 404) continue;
+    if (!res.ok) {
+      throw new Error(parse === "json" ? await res.text() : `${res.status}`);
+    }
+    return parse === "json" ? res.json() : res;
+  }
+
+  if (!lastResponse) {
+    throw new Error("No response from API");
+  }
+
+  throw new Error(
+    `API request failed with status ${lastResponse.status} at both endpoints.`
+  );
+}
 export async function fetchStaff() {
-  const res = await fetch(`${API_BASE}/staff`);
-  if (!res.ok) throw new Error(`Staff fetch failed: ${res.status}`);
-  return res.json();
+  return apiRequest("/staff");
 }
 
 export async function addStaff(data: {
@@ -14,19 +48,19 @@ export async function addStaff(data: {
   tea_slot?: string;
   status_detail?: string;
 }) {
-  const res = await fetch(`${API_BASE}/staff`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  return apiRequest(
+    "/staff",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    },
+    "json"
+  );
 }
 
 export async function fetchProfiles() {
-  const res = await fetch(`${API_BASE}/profiles`);
-  if (!res.ok) throw new Error(`Profiles fetch failed: ${res.status}`);
-  return res.json();
+  return apiRequest("/profiles");
 }
 
 export async function addProfile(data: {
@@ -38,38 +72,47 @@ export async function addProfile(data: {
   tea_slot?: string;
   status_detail?: string;
 }) {
-  const res = await fetch(`${API_BASE}/profiles`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  return apiRequest(
+    "/profiles",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    },
+    "json"
+  );
 }
 
 export async function deleteProfile(name: string) {
   const encoded = encodeURIComponent(name);
-  const res = await fetch(`${API_BASE}/profiles/${encoded}`, {
-    method: "DELETE",
-  });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  return apiRequest(
+    `/profiles/${encoded}`,
+    {
+      method: "DELETE",
+    },
+    "json"
+  );
 }
 
 export async function deleteStaff(name: string) {
   const encoded = encodeURIComponent(name);
-  const res = await fetch(`${API_BASE}/staff/${encoded}`, { method: "DELETE" });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  return apiRequest(
+    `/staff/${encoded}`,
+    { method: "DELETE" },
+    "json"
+  );
 }
 
 export async function generateTimesheet(payload: any) {
-  const res = await fetch(`${API_BASE}/generate-timesheet`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw new Error(await res.text());
+  const res = (await apiRequest(
+    "/generate-timesheet",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    "blob"
+  )) as Response;
   const blob = await res.blob();
   const dispo = res.headers.get("content-disposition") || "";
   const match = dispo.match(/filename="?([^";]+)"?/);
