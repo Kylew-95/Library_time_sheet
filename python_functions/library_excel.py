@@ -261,7 +261,8 @@ def format_decimal_time(value):
         if minutes == 60:
             hours += 1
             minutes = 0
-        return f"{hours:02d}:{minutes:02d}"
+        display_hour = hours if hours <= 12 else hours - 12
+        return f"{display_hour}:{minutes:02d}"
     except Exception:
         return str(value)
 
@@ -331,8 +332,8 @@ def generate_schedule_data(staff_data, date_str):
         role = staff.get("role", "")
         name = staff.get("name", "")
 
-        # Set Up (11:30–12) for DMs
-        if role == "Duty Manager" and (start <= 11 < end):
+        # Set Up (11:30-12) for DMs who are on shift by 11:30
+        if role == "Duty Manager" and (start <= 11.5 < end):
             pivot_schedule[name][setup_slot_key] = "Set Up"
         # NOTE: we no longer write T into pivot_schedule here;
         # we only track tea via staff["tea_slot"] and handle it in the display layer.
